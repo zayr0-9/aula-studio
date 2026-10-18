@@ -15,6 +15,10 @@ export class StreamSession {
   private buffer = '';
   private rendererAlive = 0;
   private inFlight = false;
+  private animationIndex = 0;
+  private animationAcknowledgedAt: number | null = null;
+  private revision = 0;
+  private sentRevision = 0;
   private disposed = false;
   private stopping = false;
   private preflightBlocked = false;
@@ -49,6 +53,9 @@ export class StreamSession {
     if (this.status.state === 'error')
       throw new Error('Streaming failed; restart the app to retry');
     this.profile = structuredClone(profile);
+    this.animationIndex = 0;
+    this.animationAcknowledgedAt = null;
+    this.revision++;
     this.status = { state: 'starting', message: 'Starting streaming…', frames: 0 };
     this.buffer = '';
     this.inFlight = false;
@@ -112,6 +119,9 @@ export class StreamSession {
     if (!this.child || this.status.state !== 'active')
       throw new Error('Stream session is not active');
     this.profile = structuredClone(profile);
+    this.animationIndex = 0;
+    this.animationAcknowledgedAt = null;
+    this.revision++;
     return this.snapshot();
   }
 
@@ -195,6 +205,12 @@ export class StreamSession {
           if (this.watchdog) clearTimeout(this.watchdog);
           this.watchdog = null;
           this.status.frames = Math.min(Number.MAX_SAFE_INTEGER, this.status.frames + 1);
+          if (
+            this.profile?.mode === 'animation' &&
+            this.sentRevision === this.revision &&
+            this.animationAcknowledgedAt === null
+          )
+            this.animationAcknowledgedAt = performance.now();
           // Schedule from acknowledgement, not a recurring interval: never accumulate work.
           this.frameTimer = setTimeout(() => this.sendFrame(), FRAME_INTERVAL);
         } else if (
@@ -216,7 +232,26 @@ export class StreamSession {
     const child = this.child;
     if (!child || !this.profile || this.status.state !== 'active' || this.inFlight) return;
     try {
-      const colors = buildStreamColors(this.profile, this.status.frames);
+      if (this.profile.mode === 'animation') {
+        const sequence = this.profile.animation!;
+        if (
+          this.animationAcknowledgedAt !== null &&
+          performance.now() - this.animationAcknowledgedAt >=
+            sequence.frames[this.animationIndex].durationMs
+        ) {
+          if (this.animationIndex + 1 === sequence.frames.length && !sequence.loop) {
+            this.stop();
+            return;
+          }
+          this.animationIndex = (this.animationIndex + 1) % sequence.frames.length;
+          this.animationAcknowledgedAt = null;
+        }
+      }
+      const colors = buildStreamColors(
+        this.profile,
+        this.profile.mode === 'animation' ? this.animationIndex : this.status.frames,
+      );
+      this.sentRevision = this.revision;
       this.inFlight = true;
       this.watchdog = setTimeout(
         () => this.fail('Stream frame acknowledgement timed out'),

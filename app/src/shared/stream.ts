@@ -1,8 +1,11 @@
 import { F75_DIRECT_KEYS } from '../protocol/f75-direct.ts';
 import type { F75DirectKey } from '../protocol/f75-direct.ts';
 export type { F75DirectKey } from '../protocol/f75-direct.ts';
+import { animationColors, validateAnimation } from './animation.ts';
+import type { AnimationSequence } from './animation.ts';
 export interface StreamProfile {
-  mode: 'paint' | 'solid' | 'wave' | 'breathe' | 'walk';
+  mode: 'paint' | 'solid' | 'wave' | 'breathe' | 'walk' | 'animation';
+  animation?: AnimationSequence;
   color: string;
   brightness: number;
   colors: Record<F75DirectKey, string>;
@@ -17,10 +20,14 @@ export function validateStreamProfile(value: unknown): asserts value is StreamPr
     throw new Error('Invalid stream profile');
   const p = value as StreamProfile;
   if (
-    Object.keys(p).sort().join(',') !== 'brightness,color,colors,mode' ||
-    !['paint', 'solid', 'wave', 'breathe', 'walk'].includes(p.mode)
+    Object.keys(p).sort().join(',') !==
+      (p.mode === 'animation'
+        ? 'animation,brightness,color,colors,mode'
+        : 'brightness,color,colors,mode') ||
+    !['paint', 'solid', 'wave', 'breathe', 'walk', 'animation'].includes(p.mode)
   )
     throw new Error('Invalid stream profile fields');
+  if (p.mode === 'animation') validateAnimation(p.animation);
   if (
     typeof p.brightness !== 'number' ||
     !Number.isFinite(p.brightness) ||
@@ -57,8 +64,13 @@ export function buildStreamColors(profile: StreamProfile, tick: number): number[
   validateStreamProfile(profile);
   if (!Number.isInteger(tick) || tick < 0) throw new Error('Invalid frame index');
   const result = Array.from({ length: 90 }, () => [0, 0, 0]);
+  const animated = profile.mode === 'animation' ? animationColors(profile.animation!, tick) : null;
   for (const [index, { key, slot, column }] of F75_DIRECT_KEYS.entries()) {
-    const hex = profile.mode === 'paint' ? profile.colors[key] : profile.color;
+    const hex = animated
+      ? animated[key]
+      : profile.mode === 'paint'
+        ? profile.colors[key]
+        : profile.color;
     let rgb = [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16));
     let gain = profile.brightness / 100;
     if (profile.mode === 'walk' && index !== tick % 80) gain = 0;

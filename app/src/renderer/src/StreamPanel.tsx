@@ -2,12 +2,15 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { F75_DIRECT_KEYS } from '../../protocol/f75-direct';
 import { defaultStreamProfile } from '../../shared/stream';
 import type { F75DirectKey, StreamProfile, StreamStatus } from '../../shared/stream';
+import { defaultAnimation } from '../../shared/animation';
+import { AnimationEditor } from './AnimationEditor';
 import { Keyboard } from './components/Keyboard';
 import type { KeyboardKeyAppearance } from './components/Keyboard';
 import { Select } from './components/Select';
 import './stream.css';
 
 const modes: { value: StreamProfile['mode']; label: string }[] = [
+  { value: 'animation', label: 'Custom animation' },
   { value: 'paint', label: 'Paint individual' },
   { value: 'solid', label: 'Solid' },
   { value: 'wave', label: 'Wave' },
@@ -28,6 +31,9 @@ interface StreamApi {
 export function StreamPanel({ enabled }: { enabled: boolean }) {
   const id = useId();
   const [draft, setDraft] = useState<StreamProfile>(defaultStreamProfile);
+  const [animationDraft, setAnimationDraft] = useState<ReturnType<typeof defaultAnimation> | null>(
+    null,
+  );
   const [submitted, setSubmitted] = useState<StreamProfile | null>(null);
   const [selected, setSelected] = useState<F75DirectKey[]>([]);
   const [ready, setReady] = useState(false);
@@ -262,7 +268,18 @@ export function StreamPanel({ enabled }: { enabled: boolean }) {
             id={`${id}-mode`}
             value={draft.mode}
             options={modes}
-            onChange={(mode) => setDraft((previous) => ({ ...previous, mode }))}
+            onChange={(mode) =>
+              setDraft((previous) => {
+                const { animation, ...base } = previous;
+                return mode === 'animation'
+                  ? {
+                      ...base,
+                      mode,
+                      animation: animation ?? animationDraft ?? defaultAnimation(previous.colors),
+                    }
+                  : { ...base, mode };
+              })
+            }
           />
         </div>
         <div className="control-group">
@@ -300,120 +317,134 @@ export function StreamPanel({ enabled }: { enabled: boolean }) {
           {draft.mode === 'wave' && <p>Wave uses a rainbow palette, not the chosen color.</p>}
         </div>
       </div>
-      <div className="stream-preview">
-        <h3>Draft preview</h3>
-        <p>
-          Local design only, not read from hardware. Animated modes are shown as a static color
-          guide; walking key lights one key at a time.
-        </p>
-        <Keyboard
-          label="Select physical keys for the stream draft"
-          selectedKeys={selected}
-          keyAppearance={appearance}
-          onKeySelect={({ id: key }) => {
-            if (!physicalKeys.includes(key as F75DirectKey)) return;
-            const physical = key as F75DirectKey;
-            setSelected((previous) =>
-              previous.includes(physical)
-                ? previous.filter((value) => value !== physical)
-                : [...previous, physical],
-            );
+      {draft.mode === 'animation' && draft.animation ? (
+        <AnimationEditor
+          value={draft.animation}
+          onChange={(animation) => {
+            setAnimationDraft(animation);
+            setDraft((previous) => ({ ...previous, animation }));
           }}
+          color={draft.color}
+          brightness={draft.brightness}
         />
-        <div className="action-row">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => setSelected([...physicalKeys])}
-          >
-            Select all
-          </button>
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={!selected.length}
-            onClick={() => setSelected([])}
-          >
-            Clear selection
-          </button>
-          <span className="supporting">
-            {selected.length} of {physicalKeys.length} keys selected
-          </span>
+      ) : (
+        <div className="stream-preview">
+          <h3>Draft preview</h3>
+          <p>
+            Local design only, not read from hardware. Animated modes are shown as a static color
+            guide; walking key lights one key at a time.
+          </p>
+          <Keyboard
+            label="Select physical keys for the stream draft"
+            selectedKeys={selected}
+            keyAppearance={appearance}
+            onKeySelect={({ id: key }) => {
+              if (!physicalKeys.includes(key as F75DirectKey)) return;
+              const physical = key as F75DirectKey;
+              setSelected((previous) =>
+                previous.includes(physical)
+                  ? previous.filter((value) => value !== physical)
+                  : [...previous, physical],
+              );
+            }}
+          />
+          <div className="action-row">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setSelected([...physicalKeys])}
+            >
+              Select all
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={!selected.length}
+              onClick={() => setSelected([])}
+            >
+              Clear selection
+            </button>
+            <span className="supporting">
+              {selected.length} of {physicalKeys.length} keys selected
+            </span>
+          </div>
+          <div className="action-row">
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={!selected.length || draft.mode !== 'paint'}
+              onClick={() => paint(selected, draft.color)}
+            >
+              Paint selection
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={draft.mode !== 'paint'}
+              onClick={() => paint(physicalKeys, draft.color)}
+            >
+              Fill board
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={draft.mode !== 'paint'}
+              onClick={() => paint(physicalKeys, '#000000')}
+            >
+              Clear board
+            </button>
+          </div>
+          <div className="action-row">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() =>
+                setDraft((previous) => ({
+                  ...previous,
+                  mode: 'paint',
+                  colors: {
+                    ...previous.colors,
+                    Digit1: '#00ff00',
+                    Digit2: '#8000ff',
+                    Digit3: '#ff0000',
+                    Digit4: '#0000ff',
+                  },
+                }))
+              }
+            >
+              Agent colors
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() =>
+                setDraft((previous) => ({
+                  ...previous,
+                  mode: 'paint',
+                  colors: Object.fromEntries(
+                    physicalKeys.map((key) => [key, '#000000']),
+                  ) as StreamProfile['colors'],
+                }))
+              }
+            >
+              All off
+            </button>
+          </div>
+          <p>
+            Agent colors paints 1 green, 2 purple, 3 red and 4 blue, preserving the other draft
+            colors. No agent integration. All painting and presets change the draft only.
+          </p>
         </div>
-        <div className="action-row">
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={!selected.length || draft.mode !== 'paint'}
-            onClick={() => paint(selected, draft.color)}
-          >
-            Paint selection
-          </button>
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={draft.mode !== 'paint'}
-            onClick={() => paint(physicalKeys, draft.color)}
-          >
-            Fill board
-          </button>
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={draft.mode !== 'paint'}
-            onClick={() => paint(physicalKeys, '#000000')}
-          >
-            Clear board
-          </button>
-        </div>
-        <div className="action-row">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() =>
-              setDraft((previous) => ({
-                ...previous,
-                mode: 'paint',
-                colors: {
-                  ...previous.colors,
-                  Digit1: '#00ff00',
-                  Digit2: '#8000ff',
-                  Digit3: '#ff0000',
-                  Digit4: '#0000ff',
-                },
-              }))
-            }
-          >
-            Agent colors
-          </button>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() =>
-              setDraft((previous) => ({
-                ...previous,
-                mode: 'paint',
-                colors: Object.fromEntries(
-                  physicalKeys.map((key) => [key, '#000000']),
-                ) as StreamProfile['colors'],
-              }))
-            }
-          >
-            All off
-          </button>
-        </div>
-        <p>
-          Agent colors paints 1 green, 2 purple, 3 red and 4 blue, preserving the other draft
-          colors. No agent integration. All painting and presets change the draft only.
-        </p>
-      </div>
+      )}
       <p className="stream-draft-state">
         {submitted
           ? dirty
             ? 'Draft differs from the last submitted profile.'
             : 'Draft matches the last submitted profile.'
           : 'Draft has not been submitted.'}{' '}
-        Start and Apply changes paint selected keys with the chosen color, then send the draft.
+        {draft.mode === 'animation'
+          ? 'Start plays the timeline from frame 1. Apply changes restarts playback with this draft. Paint selected keys before playing.'
+          : 'Start and Apply changes paint selected keys with the chosen color, then send the draft.'}
       </p>
       {!enabled && (
         <p>

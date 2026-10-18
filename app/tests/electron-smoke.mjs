@@ -189,11 +189,15 @@ async function run() {
     ipcMain.handle('stream:start', (_event, profile) => {
       streamStarts++;
       assert.equal(Object.keys(profile.colors).length, 80);
-      assert.equal(
-        profile.colors.Digit2,
-        '#00ff80',
-        'Start paints selected key without separate Paint selection',
-      );
+      if (profile.mode === 'animation') {
+        assert.equal(profile.animation.frames.length, 2);
+        assert.equal(profile.animation.frames[0].durationMs, 1600);
+      } else
+        assert.equal(
+          profile.colors.Digit2,
+          '#00ff80',
+          'Start paints selected key without separate Paint selection',
+        );
       streamState = { state: 'active', message: 'Streaming active', frames: 1 };
       return streamState;
     });
@@ -288,6 +292,44 @@ async function run() {
     assert.ok(Object.values(streamUi).every(Boolean), JSON.stringify(streamUi));
     assert.equal(streamStarts, 1);
     assert.equal(streamUpdates, 1);
+    const animationUi = await window.webContents.executeJavaScript(`(async () => {
+      const tick = () => new Promise(resolve => setTimeout(resolve, 60));
+      const panel = document.querySelector('.stream-panel');
+      const button = text => [...panel.querySelectorAll('button')].find(b => b.textContent.trim() === text);
+      const mode = panel.querySelector('[id$="-mode"]');
+      mode.click(); await tick();
+      [...document.querySelectorAll('[role=option]')].find(item => item.textContent === 'Custom animation').click(); await tick();
+      let editor = panel.querySelector('.animation-editor');
+      const keyboard = editor.querySelectorAll('.keyboard-key:not(.keyboard-knob)').length === 80;
+      button('Fill frame').click(); await tick();
+      button('Duplicate frame').click(); await tick();
+      const slider = editor.querySelector('[role=slider][aria-label="Frame 2 duration"]');
+      slider.dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowRight',bubbles:true})); await tick();
+      const duration = editor.querySelector('[aria-label="Frame 2 duration"]').getAttribute('aria-valuenow') === '1600';
+      const widths = [...editor.querySelectorAll('.animation-frame')].map(item => item.style.width);
+      const proportional = widths[0] === '80px' && widths[1] === '160px';
+      button('Move earlier').click(); await tick();
+      const reordered = editor.querySelector('[aria-label="Frame 1 duration"]').getAttribute('aria-valuenow') === '1600';
+      button('Save preset').click(); await tick();
+      button('Delete frame').click(); await tick();
+      button('Load preset').click(); await tick();
+      const restored = editor.querySelectorAll('.animation-frame').length === 2;
+      mode.click(); await tick();
+      [...document.querySelectorAll('[role=option]')].find(item => item.textContent === 'Solid').click(); await tick();
+      mode.click(); await tick();
+      [...document.querySelectorAll('[role=option]')].find(item => item.textContent === 'Custom animation').click(); await tick();
+      editor = panel.querySelector('.animation-editor');
+      const retained = editor.querySelectorAll('.animation-frame').length === 2;
+      button('Preview animation').click(); await tick();
+      const preview = editor.textContent.includes('Local preview');
+      button('Stop preview').click(); await tick();
+      button('Start').click(); await tick();
+      const started = panel.textContent.includes('Streaming active');
+      button('Stop').click(); await tick();
+      return { keyboard,duration,proportional,reordered,restored,retained,preview,started };
+    })()`);
+    assert.ok(Object.values(animationUi).every(Boolean), JSON.stringify(animationUi));
+    assert.equal(streamStarts, 2);
     assert.equal(indicatorWrites, 0, 'no indicator writes on startup');
     const indicatorsUi = await window.webContents.executeJavaScript(`(async () => {
       const panel = document.querySelector('[aria-labelledby="indicator-title"]');

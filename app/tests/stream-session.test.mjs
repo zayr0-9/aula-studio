@@ -225,3 +225,89 @@ test('off-mode admission refusal sends no frames and allows explicit restart aft
   f.service.stop();
   f.child.emit('close', 0);
 });
+
+function animationProfile(loop = false, durationMs = 1600) {
+  const profile = defaultStreamProfile();
+  return {
+    ...profile,
+    mode: 'animation',
+    brightness: 100,
+    animation: {
+      version: 1,
+      loop,
+      overrides: { Digit1: '#ffffff' },
+      frames: [
+        { durationMs, colors: { ...profile.colors, KeyA: '#ff0000' } },
+        { durationMs: 800, colors: { ...profile.colors, KeyA: '#0000ff' } },
+      ],
+    },
+  };
+}
+
+test('animation holds repeat at 800ms, starts duration at ack, finishes normally after final hold', (t) => {
+  const f = fixture(t);
+  const p = animationProfile();
+  f.service.start(p);
+  f.emit('ready');
+  f.tick(1200); // Initial transport latency does not consume the first hold.
+  f.emit('frame');
+  f.tick(800);
+  assert.deepEqual(f.commands[1].colors, buildStreamColors(p, 0));
+  f.emit('frame');
+  f.service.heartbeat();
+  f.tick(800);
+  assert.deepEqual(f.commands[2].colors, buildStreamColors(p, 1));
+  f.tick(400);
+  f.emit('frame');
+  f.tick(799);
+  assert.equal(f.commands.length, 3);
+  f.tick(1);
+  assert.deepEqual(f.commands.at(-1), { stop: true });
+  assert.equal(f.service.snapshot().state, 'stopping');
+  assert.equal(f.service.isOwned(), true);
+  f.child.emit('close', 0);
+  assert.equal(f.service.snapshot().state, 'off');
+  assert.equal(f.releases(), 1);
+});
+
+test('animation loops without skipped frames even after delayed acknowledgement', (t) => {
+  const f = fixture(t);
+  const p = animationProfile(true, 800);
+  f.service.start(p);
+  f.emit('ready');
+  f.tick(2000);
+  f.emit('frame');
+  f.service.heartbeat();
+  f.tick(800);
+  assert.deepEqual(f.commands[1].colors, buildStreamColors(p, 1));
+  f.emit('frame');
+  f.tick(800);
+  assert.deepEqual(f.commands[2].colors, buildStreamColors(p, 0));
+  f.service.stop();
+  f.child.emit('close', 0);
+});
+
+test('update resets animation timeline and stale in-flight ack cannot start new hold', (t) => {
+  const f = fixture(t);
+  const p = animationProfile(true, 800);
+  f.service.start(p);
+  f.emit('ready');
+  f.emit('frame');
+  f.tick(800);
+  assert.deepEqual(f.commands[1].colors, buildStreamColors(p, 1));
+  const next = structuredClone(p);
+  f.service.update(next);
+  next.animation.frames[0].colors.KeyA = '#00ff00';
+  f.emit('frame'); // Ack belongs to the old revision.
+  f.tick(800);
+  assert.deepEqual(f.commands[2].colors, buildStreamColors(p, 0));
+  f.tick(800);
+  f.emit('frame');
+  f.service.heartbeat();
+  f.tick(799);
+  assert.equal(f.commands.length, 3);
+  f.tick(1);
+  assert.deepEqual(f.commands[3].colors, buildStreamColors(p, 1));
+  f.service.stop();
+  f.child.emit('close', 0);
+});
