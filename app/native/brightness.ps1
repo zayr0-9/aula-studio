@@ -1,6 +1,6 @@
 # Fixed, single-transaction transport. No saved configuration, retries or restoration.
 param(
-    [ValidateSet('Read', 'Set', 'ReadEffect', 'SetEffect', 'ReadSpeed', 'SetSpeed', 'SetEffectBrightness', 'ReadColor', 'SetColor', 'ReadPgUp', 'SetPgUp', 'ReadMappings', 'SetMapping', 'CompileCheck')]
+    [ValidateSet('Read', 'Set', 'ReadEffect', 'SetEffect', 'ReadSpeed', 'SetSpeed', 'SetEffectBrightness', 'ReadColor', 'SetColor', 'ReadPgUp', 'SetPgUp', 'ReadMappings', 'SetMapping', 'ReadIndicators', 'SetIndicator', 'CompileCheck')]
     [string]$Action = 'Read',
     [int]$Brightness = -1,
     [int]$Effect = -1,
@@ -9,6 +9,7 @@ param(
     [int]$Green = -1,
     [int]$Blue = -1,
     [int]$Colourful = -1,
+    [string]$Key,
     [int]$PgUp = -1,
     [Alias('Source')]
     [string]$SourceKey,
@@ -288,6 +289,119 @@ public static class AulaBrightnessTransport {
             } finally { if (owned) mutex.ReleaseMutex(); }
         }
     }
+    // Separate custom-mode path: never weaken ordinary Query/transition admission.
+    static void ValidateIndicatorBlock(byte[] response, bool configuration, bool allowOrdinary = false) {
+        if (response == null || response.Length != 520) throw new ArgumentException("Invalid indicator block length.");
+        int length = configuration ? 128 : 384;
+        byte[] header = { 6, configuration ? (byte)0x84 : (byte)0x86, 0, 0, 1, 0, (byte)(length & 255), (byte)(length >> 8) };
+        for (int i = 0; i < 8; i++)
+            if (response[i] != header[i]) throw new InvalidOperationException("Invalid indicator response header.");
+        for (int i = 8 + length; i < response.Length; i++)
+            if (response[i] != 0) throw new InvalidOperationException("Invalid indicator response padding.");
+        if (configuration) {
+            if (response[134] != 0x5a || response[135] != 0xa5)
+                throw new InvalidOperationException("Invalid configuration markers.");
+            if (allowOrdinary && response[17] == 0) return;
+            if (response[17] != 1 || response[18] != 21 || response[67] != 0x40)
+                throw new InvalidOperationException("Indicators require existing custom mode; no mode transition performed.");
+        }
+    }
+    static byte[] IndicatorQuery(SafeFileHandle handle, bool configuration, bool allowOrdinary = false) {
+        int length = configuration ? 128 : 384;
+        var query = new byte[520];
+        byte[] header = { 6, configuration ? (byte)0x84 : (byte)0x86, 0, 0, 1, 0, (byte)(length & 255), (byte)(length >> 8) };
+        Array.Copy(header, query, 8);
+        CheckOfficialApp();
+        Check(HidD_SetFeature(handle, query, query.Length), "Indicator query");
+        Thread.Sleep(25);
+        // Bool-only API cannot independently attest transfer length or freshness.
+        var response = new byte[520]; response[0] = 6;
+        CheckOfficialApp();
+        Check(HidD_GetFeature(handle, response, response.Length), "Indicator response");
+        ValidateIndicatorBlock(response, configuration, allowOrdinary);
+        return response;
+    }
+    static int IndicatorSlot(string key) {
+        switch (key) {
+            case "number1": return 7;
+            case "number2": return 13;
+            case "number3": return 19;
+            case "number4": return 25;
+            default: throw new ArgumentException("Key must be number1, number2, number3 or number4.");
+        }
+    }
+    static byte[] WithIndicator(byte[] fresh, string key, int r, int g, int b) {
+        int slot = IndicatorSlot(key);
+        if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255)
+            throw new ArgumentException("RGB must each be 0..255.");
+        ValidateIndicatorBlock(fresh, false);
+        byte[] expected = (byte[])fresh.Clone();
+        expected[8 + slot] = (byte)r;
+        expected[8 + 126 + slot] = (byte)g;
+        expected[8 + 252 + slot] = (byte)b;
+        // Includes opaque payload378..383; never normalize or replay a fixture.
+        return expected;
+    }
+    static string IndicatorsResult(byte[] table) {
+        ValidateIndicatorBlock(table, false);
+        var result = new System.Text.StringBuilder("{");
+        for (int digit = 1; digit <= 4; digit++) {
+            int slot = 7 + (digit - 1) * 6;
+            if (digit != 1) result.Append(',');
+            result.Append("\"Digit").Append(digit).Append("\":{\"red\":").Append(table[8 + slot])
+                .Append(",\"green\":").Append(table[134 + slot]).Append(",\"blue\":").Append(table[260 + slot]).Append('}');
+        }
+        return result.Append('}').ToString();
+    }
+    public static string RunIndicators(bool write, string key, int r, int g, int b) {
+        if (write) {
+            IndicatorSlot(key);
+            if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255)
+                throw new ArgumentException("SetIndicator requires RGB 0..255.");
+        } else if (key != null || r != -1 || g != -1 || b != -1) {
+            throw new ArgumentException("ReadIndicators accepts no key or RGB parameters.");
+        }
+        if (IntPtr.Size != 8 || Marshal.SizeOf(typeof(InterfaceData)) != 32 || Marshal.SizeOf(typeof(Caps)) != 64 ||
+            Marshal.SizeOf(typeof(ValueCaps)) != 72 || Marshal.SizeOf(typeof(Attributes)) != 12)
+            throw new InvalidOperationException("Unexpected ABI; 64-bit Windows is required.");
+        using (var mutex = new Mutex(false, @"Global\AulaBrightness_VID258A_PID010C_MI01_COL06")) {
+            bool owned = false;
+            try {
+                try { owned = mutex.WaitOne(0); }
+                catch (AbandonedMutexException) {
+                    owned = true;
+                    throw new InvalidOperationException("Previous transaction was interrupted; state uncertain. No operation performed.");
+                }
+                if (!owned) throw new InvalidOperationException("Another brightness transaction is active.");
+                CheckOfficialApp();
+                string path = FindCollection();
+                CheckOfficialApp();
+                using (var handle = CreateFile(path, 0, 3, IntPtr.Zero, 3, 0, IntPtr.Zero)) {
+                    Check(!handle.IsInvalid, "Open filtered collection");
+                    VerifyCollection(handle);
+                    byte[] freshConfiguration = IndicatorQuery(handle, true);
+                    byte[] table = IndicatorQuery(handle, false);
+                    byte[] current = IndicatorQuery(handle, true);
+                    VerifyPayload(current, freshConfiguration, 128, "Prewrite configuration");
+                    if (!write) return IndicatorsResult(table);
+                    byte[] expected = WithIndicator(table, key, r, g, b);
+                    bool changed = false;
+                    for (int i = 8; i < 392; i++) if (expected[i] != table[i]) changed = true;
+                    if (!changed) return IndicatorsResult(table);
+                    byte[] report = (byte[])expected.Clone(); report[1] = 0x06;
+                    CheckOfficialApp();
+                    ConfigurationWriteAttempted = true;
+                    Check(HidD_SetFeature(handle, report, report.Length), "Static indicator write");
+                    Thread.Sleep(500);
+                    byte[] actual = IndicatorQuery(handle, false);
+                    VerifyPayload(actual, expected, 384, "Static table");
+                    byte[] actualConfiguration = IndicatorQuery(handle, true);
+                    VerifyPayload(actualConfiguration, freshConfiguration, 128, "Configuration");
+                    return IndicatorsResult(actual);
+                }
+            } finally { if (owned) mutex.ReleaseMutex(); }
+        }
+    }
     // Fixed semantic whitelist: physical identities from keyboard-layout.ts; usages
     // from matrix-layer0-20261018-103210.json. Home/Insert are standard HID usages.
     static readonly string[] MappingIds = ("Escape F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 " +
@@ -465,8 +579,8 @@ public static class AulaBrightnessTransport {
         } else if (effectOperation) {
             if (speed != -1) throw new ArgumentException("Speed is accepted only for speed operations.");
             if (setBrightness || brightness != -1) throw new ArgumentException("Brightness is not accepted for effect operations.");
-            if (effect != -1 && effect != 1 && effect != 11 && effect != 17)
-                throw new ArgumentException("Effect must be 1, 11 or 17.");
+            if (effect != -1 && effect != 0 && effect != 1 && effect != 11 && effect != 17)
+                throw new ArgumentException("Effect must be 0, 1, 11 or 17.");
         } else {
             if (speed != -1) throw new ArgumentException("Speed is accepted only for speed operations.");
             if (effect != -1) throw new ArgumentException("Effect is accepted only for effect operations.");
@@ -494,7 +608,9 @@ public static class AulaBrightnessTransport {
                 using (var handle = CreateFile(path, 0, 3, IntPtr.Zero, 3, 0, IntPtr.Zero)) {
                     Check(!handle.IsInvalid, "Open filtered collection");
                     VerifyCollection(handle);
-                    byte[] fresh = Query(handle);
+                    // Only metadata ReadEffect may admit the owner-observed custom tuple.
+                    // Every setter and other ordinary reader retains strict Query refusal.
+                    byte[] fresh = effectOperation && effect == -1 ? IndicatorQuery(handle, true, true) : Query(handle);
                     if (speedOperation) {
                         if (fresh[18] != 11) throw new InvalidOperationException("Speed requires Neon_stream mode (11).");
                         if (speed == -1) return fresh[8 + 0x4f] >> 4;
@@ -527,6 +643,20 @@ public static class AulaBrightnessTransport {
 }
 '@
 try {
+    if ($Action -in @('ReadIndicators', 'SetIndicator')) {
+        foreach ($name in $PSBoundParameters.Keys) {
+            if ($name -ne 'Action' -and -not ($Action -eq 'SetIndicator' -and $name -in @('Key', 'Red', 'Green', 'Blue'))) {
+                throw ($name + ' is not accepted for ' + $Action + '.')
+            }
+        }
+        if ($Action -eq 'SetIndicator') {
+            if (-not $PSBoundParameters.ContainsKey('Key') -or $Key -cnotin @('number1', 'number2', 'number3', 'number4')) {
+                throw 'SetIndicator requires Key number1, number2, number3 or number4.'
+            }
+        }
+    } elseif ($PSBoundParameters.ContainsKey('Key')) {
+        throw 'Key is accepted only for SetIndicator.'
+    }
     if ($Action -in @('ReadMappings', 'SetMapping')) {
         foreach ($name in $PSBoundParameters.Keys) {
             if ($name -ne 'Action' -and -not ($Action -eq 'SetMapping' -and $name -in @('SourceKey', 'Target'))) {
@@ -554,18 +684,18 @@ try {
         throw 'PgUp is accepted only for SetPgUp.'
     }
     foreach ($name in @('Red', 'Green', 'Blue', 'Colourful')) {
-        if ($Action -ne 'SetColor' -and $PSBoundParameters.ContainsKey($name)) {
+        if ($PSBoundParameters.ContainsKey($name) -and $Action -ne 'SetColor' -and -not ($Action -eq 'SetIndicator' -and $name -ne 'Colourful')) {
             throw ($name + ' is accepted only for SetColor.')
         }
     }
-    if ($Action -eq 'SetColor') {
+    if ($Action -in @('SetColor', 'SetIndicator')) {
         foreach ($name in @('Red', 'Green', 'Blue')) {
             $value = Get-Variable -Name $name -ValueOnly
             if (-not $PSBoundParameters.ContainsKey($name) -or $value -lt 0 -or $value -gt 255) {
-                throw 'SetColor requires Red, Green and Blue 0..255.'
+                throw ($Action + ' requires Red, Green and Blue 0..255.')
             }
         }
-        if (-not $PSBoundParameters.ContainsKey('Colourful') -or $Colourful -notin @(0, 1)) {
+        if ($Action -eq 'SetColor' -and (-not $PSBoundParameters.ContainsKey('Colourful') -or $Colourful -notin @(0, 1))) {
             throw 'SetColor requires Colourful 0 or 1.'
         }
     }
@@ -579,7 +709,7 @@ try {
         throw 'Brightness is accepted only for Set.'
     }
     if ($Action -eq 'SetEffect') {
-        if ($Effect -notin @(1, 11, 17)) { throw 'SetEffect requires Effect 1, 11 or 17.' }
+        if ($Effect -notin @(0, 1, 11, 17)) { throw 'SetEffect requires Effect 0, 1, 11 or 17.' }
     } elseif ($Action -ne 'SetEffectBrightness' -and $PSBoundParameters.ContainsKey('Effect')) {
         throw 'Effect is accepted only for SetEffect.'
     }
@@ -591,6 +721,11 @@ try {
     Add-Type -TypeDefinition $source -ErrorAction Stop
     # Compilation only: do not acquire the mutex, enumerate, open or query hardware.
     if ($Action -eq 'CompileCheck') { exit 0 }
+    if ($Action -in @('ReadIndicators', 'SetIndicator')) {
+        $indicatorKey = if ($Action -eq 'SetIndicator') { $Key } else { $null }
+        [Console]::Out.WriteLine([AulaBrightnessTransport]::RunIndicators(($Action -eq 'SetIndicator'), $indicatorKey, $Red, $Green, $Blue))
+        exit 0
+    }
     if ($Action -in @('ReadColor', 'SetColor')) {
         $result = [AulaBrightnessTransport]::RunColor(($Action -eq 'SetColor'), $Red, $Green, $Blue, $Colourful)
         [Console]::Out.WriteLine($result)
@@ -620,7 +755,7 @@ try {
 } catch {
     $message = $_.Exception.GetBaseException().Message
     if (('AulaBrightnessTransport' -as [type]) -and [AulaBrightnessTransport]::ConfigurationWriteAttempted) {
-        $writeKind = if ($Action -in @('SetPgUp', 'SetMapping')) { 'Key matrix' } elseif ($Action -eq 'SetColor') { 'Color (non-atomic configuration/palette)' } elseif ($Action -eq 'SetSpeed') { 'Speed' } elseif ($Action -in @('SetEffect', 'SetEffectBrightness')) { 'Effect' } else { 'Brightness' }
+        $writeKind = if ($Action -eq 'SetIndicator') { 'Static indicator' } elseif ($Action -in @('SetPgUp', 'SetMapping')) { 'Key matrix' } elseif ($Action -eq 'SetColor') { 'Color (non-atomic configuration/palette)' } elseif ($Action -eq 'SetSpeed') { 'Speed' } elseif ($Action -in @('SetEffect', 'SetEffectBrightness')) { 'Effect' } else { 'Brightness' }
         $message = $writeKind + ' write was attempted; outcome uncertain. No retry or restoration was attempted. ' + $message
     }
     [Console]::Error.WriteLine($message)

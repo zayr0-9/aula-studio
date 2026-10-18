@@ -182,11 +182,48 @@ async function run() {
       hardwareEnabled: true,
       platform: process.platform,
     }));
+    let streamStarts = 0;
+    let streamUpdates = 0;
+    let streamState = { state: 'off', message: 'Streaming off', frames: 0 };
+    ipcMain.handle('stream:status', () => streamState);
+    ipcMain.handle('stream:start', (_event, profile) => {
+      streamStarts++;
+      assert.equal(Object.keys(profile.colors).length, 80);
+      assert.equal(
+        profile.colors.Digit2,
+        '#00ff80',
+        'Start paints selected key without separate Paint selection',
+      );
+      streamState = { state: 'active', message: 'Streaming active', frames: 1 };
+      return streamState;
+    });
+    ipcMain.handle('stream:update', () => {
+      streamUpdates++;
+      return streamState;
+    });
+    ipcMain.handle('stream:stop', () => {
+      streamState = { state: 'off', message: 'Streaming off', frames: 1 };
+      return streamState;
+    });
+    let indicatorWrites = 0;
+    const indicatorColors = Object.fromEntries(
+      ['Digit1', 'Digit2', 'Digit3', 'Digit4'].map((key) => [key, { red: 0, green: 0, blue: 0 }]),
+    );
+    ipcMain.handle('indicators:read', () => indicatorColors);
+    ipcMain.handle('indicators:set', (_event, key, color) => {
+      indicatorWrites++;
+      indicatorColors[key] = color;
+      return indicatorColors;
+    });
     let lightingWrites = 0;
     let lightingReads = 0;
     ipcMain.handle('effect:read', () => {
       lightingReads++;
       return 1;
+    });
+    ipcMain.handle('effect:set', (_event, effect) => {
+      assert.equal(effect, 0);
+      return 0;
     });
     ipcMain.handle('brightness:read', () => 6);
     ipcMain.handle('color:read', () => ({ red: 12, green: 34, blue: 56, colourful: false }));
@@ -230,6 +267,40 @@ async function run() {
       return { colorMatches, brightnessMatches, sections, noSimulatorControls, draftNotObserved, appliedObserved, frostedCap, lightThroughCap };
     })()`);
     assert.ok(Object.values(lightingUi).every(Boolean), JSON.stringify(lightingUi));
+    assert.equal(streamStarts, 0, 'stream never auto-starts');
+    const streamUi = await window.webContents.executeJavaScript(`(async () => {
+      const tick = () => new Promise(resolve => setTimeout(resolve, 80));
+      const panel = document.querySelector('.stream-panel');
+      const button = text => [...panel.querySelectorAll('button')].find(b => b.textContent.trim() === text);
+      const initiallyDisabled = button('Start').disabled;
+      const keyboardKeys = panel.querySelectorAll('.keyboard-key:not(.keyboard-knob)').length === 80;
+      button('Agent colors').click(); await tick();
+      panel.querySelector('.keyboard-key[aria-label^="Digit2"]').click(); await tick();
+      panel.querySelector('input[type=checkbox]').click(); await new Promise(resolve => setTimeout(resolve, 650));
+      button('Start').click(); await tick();
+      const started = panel.textContent.includes('Streaming active');
+      button('All off').click(); await tick();
+      const draftOnly = panel.textContent.includes('Draft differs');
+      button('Apply changes').click(); await tick();
+      button('Stop').click(); await tick();
+      return { initiallyDisabled, keyboardKeys, started, draftOnly, stopped: panel.textContent.includes('Streaming off') };
+    })()`);
+    assert.ok(Object.values(streamUi).every(Boolean), JSON.stringify(streamUi));
+    assert.equal(streamStarts, 1);
+    assert.equal(streamUpdates, 1);
+    assert.equal(indicatorWrites, 0, 'no indicator writes on startup');
+    const indicatorsUi = await window.webContents.executeJavaScript(`(async () => {
+      const panel = document.querySelector('[aria-labelledby="indicator-title"]');
+      const button = text => [...panel.querySelectorAll('button')].find(item => item.textContent.trim() === text);
+      const initialDisabled = button('Apply key 1').disabled;
+      panel.querySelector('input[type=checkbox]').click();
+      await new Promise(resolve => setTimeout(resolve, 50));
+      button('Apply key 1').click();
+      await new Promise(resolve => setTimeout(resolve, 80));
+      return { initialDisabled, applied: panel.textContent.includes('applied and read back'), observed: panel.textContent.includes('RGB 0, 255, 0') };
+    })()`);
+    assert.ok(Object.values(indicatorsUi).every(Boolean), JSON.stringify(indicatorsUi));
+    assert.equal(indicatorWrites, 1);
     assert.equal(lightingWrites, 1);
     assert.equal(lightingReads, 1, 'lighting is read automatically once on startup');
     const mappingUi = await window.webContents.executeJavaScript(`(async () => {

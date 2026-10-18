@@ -1,0 +1,34 @@
+.stream-warning {
+  padding: 14px 16px;
+  border: 1px solid var(--control-border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--control);
+}
+.stream-warning p + p {
+  margin-top: 8px;
+}
+.stream-preview {
+  padding-top: 18px;
+  border-top: 1px solid var(--divider);
+}
+.stream-preview > * + * {
+  margin-top: 14px;
+}
+.stream-preview h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.stream-color {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.stream-preview .action-row {
+  align-items: center;
+}
+.stream-draft-state {
+  border-top: 1px solid var(--divider);
+  padding-top: 16px;
+}

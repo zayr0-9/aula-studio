@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 // Replace only build-time assets and the Windows lighting adapter. No native helper runs.
 const lightingUrl = `data:text/javascript,${encodeURIComponent(`
   export const calls = [];
+  export async function windowsIndicators() { calls.push(['indicators']); return Object.fromEntries(['Digit1','Digit2','Digit3','Digit4'].map(key => [key, {red:0,green:0,blue:0}])); }
   export async function windowsMapping() { calls.push(['mapping']); return []; }
   export async function windowsBrightness(...args) { calls.push(args); return args[0] ?? 9; }
   export async function windowsColor(color) {
@@ -16,7 +17,7 @@ const lightingUrl = `data:text/javascript,${encodeURIComponent(`
 const hooks = registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === './windows-brightness') return { url: lightingUrl, shortCircuit: true };
-    if (specifier.endsWith('knob-session.ps1?asset'))
+    if (specifier.endsWith('.ps1?asset'))
       return {
         url: 'data:text/javascript,export default "unused-knob-helper";',
         shortCircuit: true,

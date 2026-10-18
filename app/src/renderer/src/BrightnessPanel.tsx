@@ -3,7 +3,17 @@ import { DesignPreview } from './DesignPreview';
 import { Select } from './components/Select';
 import type { FixedColor } from '../../shared/color';
 
-export function BrightnessPanel({ enabled }: { enabled: boolean }) {
+import type { IndicatorColors } from '../../shared/indicators';
+
+export function BrightnessPanel({
+  enabled,
+  indicators,
+  onIndicators,
+}: {
+  enabled: boolean;
+  indicators: IndicatorColors | null;
+  onIndicators: (colors: IndicatorColors) => void;
+}) {
   const [value, setValue] = useState(9);
   const [color, setColor] = useState<FixedColor>({ red: 255, green: 0, blue: 0, colourful: false });
   const [observedColor, setObservedColor] = useState<FixedColor | null>(null);
@@ -68,17 +78,20 @@ export function BrightnessPanel({ enabled }: { enabled: boolean }) {
             setObservedSpeed(currentSpeed);
           }
         }
+        if (selected === 21) onIndicators(await window.aula.readIndicators());
         if (selected === 1) {
           const currentColor = await window.aula.readColor();
           setColor(currentColor);
           setObservedColor(currentColor);
         }
         setMessage(
-          !supported
-            ? 'This effect is not supported. Choose an effect and select Apply effect to replace it. Nothing was changed.'
-            : action === 'effect'
-              ? 'Effect applied and verified. Available settings refreshed from the keyboard.'
-              : 'Settings read from the keyboard. Nothing was changed.',
+          selected === 21
+            ? 'Custom per-key colors read. Use Per-key colors below; ordinary effect transitions are disabled in this mode.'
+            : !supported
+              ? 'This effect is not supported. Choose an effect and select Apply effect to replace it. Nothing was changed.'
+              : action === 'effect'
+                ? 'Effect applied and verified. Available settings refreshed from the keyboard.'
+                : 'Settings read from the keyboard. Nothing was changed.',
         );
       }
     } catch (error) {
@@ -122,7 +135,12 @@ export function BrightnessPanel({ enabled }: { enabled: boolean }) {
           Read from keyboard
         </button>
       </header>
-      <DesignPreview effect={observedEffect} brightness={observed} color={observedColor} />
+      <DesignPreview
+        effect={observedEffect}
+        brightness={observed}
+        color={observedColor}
+        indicators={indicators}
+      />
 
       <div className="lighting-sections">
         <section className="lighting-section" aria-labelledby="effect-color-title">
@@ -136,7 +154,9 @@ export function BrightnessPanel({ enabled }: { enabled: boolean }) {
               { value: 1, label: 'Fixed on' },
               { value: 17, label: 'Blossoming' },
             ]}
-            disabled={!enabled || busy || blocked || observedEffect === null}
+            disabled={
+              !enabled || busy || blocked || observedEffect === null || observedEffect === 21
+            }
             onChange={setEffect}
           />
           <p className="supporting">
@@ -149,13 +169,19 @@ export function BrightnessPanel({ enabled }: { enabled: boolean }) {
                   ? 'Fixed on'
                   : observedEffect === 17
                     ? 'Blossoming'
-                    : `Unsupported effect (${observedEffect})`}
-            {effect !== observedEffect && observedEffect !== null ? ' · Selection not applied' : ''}
+                    : observedEffect === 21
+                      ? 'Custom per-key mode · use Per-key colors below'
+                      : `Unsupported effect (${observedEffect})`}
+            {effect !== observedEffect && observedEffect !== null && observedEffect !== 21
+              ? ' · Selection not applied'
+              : ''}
           </p>
           <button
             type="button"
             className="primary-button"
-            disabled={!enabled || busy || blocked || observedEffect === null}
+            disabled={
+              !enabled || busy || blocked || observedEffect === null || observedEffect === 21
+            }
             onClick={() => {
               void transact('effect');
             }}

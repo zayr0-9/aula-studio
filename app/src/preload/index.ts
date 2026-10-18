@@ -1,3 +1,5 @@
+import type { StreamProfile, StreamStatus } from '../shared/stream';
+import type { IndicatorColors, IndicatorKey, IndicatorRgb } from '../shared/indicators';
 import { contextBridge, ipcRenderer } from 'electron';
 import type { KeyAssignment } from '../shared/mapping';
 import type { FixedColor } from '../shared/color';
@@ -7,6 +9,18 @@ import type { ShellInfo } from '../shared/contracts';
 contextBridge.exposeInMainWorld(
   'aula',
   Object.freeze({
+    getStreamStatus: (): Promise<StreamStatus> =>
+      ipcRenderer.invoke('stream:status') as Promise<StreamStatus>,
+    startStream: (profile: StreamProfile): Promise<StreamStatus> =>
+      ipcRenderer.invoke('stream:start', profile) as Promise<StreamStatus>,
+    updateStream: (profile: StreamProfile): Promise<StreamStatus> =>
+      ipcRenderer.invoke('stream:update', profile) as Promise<StreamStatus>,
+    stopStream: (): Promise<StreamStatus> =>
+      ipcRenderer.invoke('stream:stop') as Promise<StreamStatus>,
+    readIndicators: (): Promise<IndicatorColors> =>
+      ipcRenderer.invoke('indicators:read') as Promise<IndicatorColors>,
+    setIndicator: (key: IndicatorKey, color: IndicatorRgb): Promise<IndicatorColors> =>
+      ipcRenderer.invoke('indicators:set', key, color) as Promise<IndicatorColors>,
     readBrightness: (): Promise<number> => ipcRenderer.invoke('brightness:read') as Promise<number>,
     setBrightness: (value: number): Promise<number> =>
       ipcRenderer.invoke('brightness:set', value) as Promise<number>,

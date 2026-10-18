@@ -1,3 +1,4 @@
+import { validateStreamProfile } from '../shared/stream';
 import { validateKnobProfile } from '../shared/knob';
 import { app, BrowserWindow, ipcMain, session } from 'electron';
 import { join } from 'node:path';
@@ -7,7 +8,7 @@ import type { IpcMainInvokeEvent } from 'electron';
 import { createBackend } from './backend';
 
 const backend = createBackend();
-const { brightness, knob } = backend;
+const { brightness, knob, stream } = backend;
 const primaryInstance = app.requestSingleInstanceLock();
 if (!primaryInstance) app.quit();
 
@@ -48,12 +49,15 @@ function createWindow(): void {
   mainWindow.once('ready-to-show', () => mainWindow?.show());
   mainWindow.webContents.on('did-start-navigation', () => {
     knob.disable();
+    stream.stop();
   });
   mainWindow.webContents.on('render-process-gone', () => {
     knob.disable();
+    stream.stop();
   });
   mainWindow.on('closed', () => {
     knob.disable();
+    stream.stop();
     mainWindow = null;
   });
   if (!app.isPackaged && developmentUrl) {
@@ -88,6 +92,46 @@ void app.whenReady().then(() => {
       hardwareEnabled: backend.hardwareEnabled,
       platform: process.platform,
     };
+  });
+  ipcMain.handle('stream:status', (event, ...args: unknown[]) => {
+    authorize(event);
+    if (args.length) throw new Error('Unexpected stream status arguments');
+    stream.heartbeat();
+    return stream.snapshot();
+  });
+  ipcMain.handle('stream:start', (event, ...args: unknown[]) => {
+    authorize(event);
+    if (args.length !== 1) throw new Error('Expected one stream profile');
+    validateStreamProfile(args[0]);
+    if (stream.isOwned()) throw new Error('Stream already owned');
+    brightness.reserveStream();
+    try {
+      return stream.start(args[0]);
+    } catch (error) {
+      if (!stream.isOwned()) brightness.releaseStream();
+      throw error;
+    }
+  });
+  ipcMain.handle('stream:update', (event, ...args: unknown[]) => {
+    authorize(event);
+    if (args.length !== 1) throw new Error('Expected one stream profile');
+    validateStreamProfile(args[0]);
+    return stream.update(args[0]);
+  });
+  ipcMain.handle('stream:stop', (event, ...args: unknown[]) => {
+    authorize(event);
+    if (args.length) throw new Error('Unexpected stream stop arguments');
+    return stream.stop();
+  });
+  ipcMain.handle('indicators:read', (event, ...args: unknown[]) => {
+    authorize(event);
+    if (args.length) throw new Error('Unexpected indicator read arguments');
+    return brightness.readIndicators();
+  });
+  ipcMain.handle('indicators:set', (event, ...args: unknown[]) => {
+    authorize(event);
+    if (args.length !== 2) throw new Error('Expected indicator key and RGB');
+    return brightness.setIndicator(args[0], args[1]);
   });
   ipcMain.handle('brightness:read', (event, ...args: unknown[]) => {
     authorize(event);
@@ -194,7 +238,7 @@ app.on('before-quit', (event) => {
   event.preventDefault();
   if (shutdownStarted) return;
   shutdownStarted = true;
-  void Promise.all([knob.shutdown(), brightness.stop()]).finally(() => {
+  void Promise.all([stream.shutdown(), knob.shutdown(), brightness.stop()]).finally(() => {
     shutdownReady = true;
     app.quit();
   });

@@ -75,3 +75,60 @@ foreach ($sourceMode in @(1, 11, 17)) {
     }
 }
 "PASS: $combinedCount production-native combined mapping cases; sources 1/11/17, targets 1/11, bounds and full preservation; no device access"
+
+# Static indicator tests use synthetic buffers only; never call RunIndicators/device APIs.
+$flags = [Reflection.BindingFlags]'NonPublic,Static'
+$indicator = [AulaBrightnessTransport].GetMethod('WithIndicator', $flags)
+$validate = [AulaBrightnessTransport].GetMethod('ValidateIndicatorBlock', $flags)
+$json = [AulaBrightnessTransport].GetMethod('IndicatorsResult', $flags)
+function Assert-Rejected($Method, [object[]]$Arguments) {
+    $rejected = $false
+    try { $null = $Method.Invoke($null, $Arguments) } catch { $rejected = $true }
+    if (-not $rejected) { throw 'Invalid indicator input accepted' }
+}
+$table = [byte[]]::new(520)
+[byte[]]$header = @(6,134,0,0,1,0,128,1)
+[Array]::Copy($header, $table, 8)
+for ($i = 8; $i -lt 392; $i++) { $table[$i] = (($i * 37 + 13) % 256) }
+$snapshot = [byte[]]$table.Clone()
+foreach ($digit in 1..4) {
+    $slot = 7 + 6 * ($digit - 1)
+    $copy = [byte[]]$indicator.Invoke($null, [object[]]@($table, "number$digit", 0, 128, 255))
+    for ($i = 0; $i -lt 520; $i++) {
+        $expected = if ($i -eq 8+$slot) { 0 } elseif ($i -eq 134+$slot) { 128 } elseif ($i -eq 260+$slot) { 255 } else { $snapshot[$i] }
+        if ($copy[$i] -ne $expected -or $table[$i] -ne $snapshot[$i]) { throw "Indicator preservation failed at $i" }
+    }
+    $decoded = $json.Invoke($null, [object[]]@(,$copy)) | ConvertFrom-Json
+    $rgb = $decoded."Digit$digit"
+    if ($rgb.red -ne 0 -or $rgb.green -ne 128 -or $rgb.blue -ne 255) { throw 'Indicator JSON decoding failed' }
+    $noop = [byte[]]$indicator.Invoke($null, [object[]]@($copy, "number$digit", 0, 128, 255))
+    for ($i = 0; $i -lt 520; $i++) { if ($noop[$i] -ne $copy[$i]) { throw 'No-op encoder changed table' } }
+}
+foreach ($invalid in @(@('Digit1',0,0,0), @('number5',0,0,0), @('number1',-1,0,0), @('number1',0,256,0), @('number1',0,0,256))) {
+    Assert-Rejected $indicator ([object[]]@($table,$invalid[0],$invalid[1],$invalid[2],$invalid[3]))
+}
+foreach ($offset in @(0,1,2,3,4,5,6,7,392,519)) {
+    $bad = [byte[]]$table.Clone(); $bad[$offset] = $bad[$offset] -bxor 1
+    Assert-Rejected $validate ([object[]]@($bad,$false,$false))
+}
+Assert-Rejected $validate ([object[]]@([byte[]]::new(519),$false,$false))
+$config = [byte[]]::new(520)
+[byte[]]$configHeader = @(6,132,0,0,1,0,128,0)
+[Array]::Copy($configHeader,$config,8)
+$config[134] = 90; $config[135] = 165
+foreach ($selector in @(0,1,11,17,99,255)) {
+    $config[18] = $selector
+    $null = $validate.Invoke($null,[object[]]@($config,$true,$true))
+    Assert-Rejected $validate ([object[]]@($config,$true,$false))
+}
+$config[17] = 1; $config[18] = 21; $config[67] = 64
+$null = $validate.Invoke($null,[object[]]@($config,$true,$false))
+$null = $validate.Invoke($null,[object[]]@($config,$true,$true))
+$ordinary = [AulaBrightnessTransport].GetMethod('ValidateOrdinaryConfiguration',$flags)
+Assert-Rejected $ordinary ([object[]]@(,$config))
+foreach ($offset in @(17,18,67,134,135,136,519)) {
+    $bad = [byte[]]$config.Clone(); $bad[$offset] = if ($offset -eq 17) { 2 } else { $bad[$offset] -bxor 1 }
+    Assert-Rejected $validate ([object[]]@($bad,$true,$true))
+}
+if ([AulaBrightnessTransport]::ConfigurationWriteAttempted) { throw 'Offline tests attempted a setter' }
+'PASS: native static indicator mapping, full opaque-tail preservation, JSON, no-op, bounds/header/padding and mode-aware metadata admission; no device access'

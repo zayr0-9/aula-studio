@@ -1,3 +1,8 @@
+import {
+  validateIndicatorKey,
+  validateIndicatorRgb,
+  validateIndicatorColors,
+} from '../shared/indicators';
 import { validateMappingSource, validateMappingTarget, validateMappings } from '../shared/mapping';
 import type { KeyAssignment } from '../shared/mapping';
 import { validateFixedColor } from '../shared/color';
@@ -182,6 +187,63 @@ export async function windowsMapping(source?: string, target?: string): Promise<
           resolve(result);
         } catch {
           reject(new Error('Invalid mapping helper response'));
+        }
+      },
+    );
+  });
+}
+
+/** Manual static edits only; no animation loop or mode/configuration writes. */
+export async function windowsIndicators(
+  key?: import('../shared/indicators').IndicatorKey,
+  color?: import('../shared/indicators').IndicatorRgb,
+): Promise<import('../shared/indicators').IndicatorColors> {
+  if (key !== undefined || color !== undefined) {
+    validateIndicatorKey(key);
+    validateIndicatorRgb(color);
+  }
+  if (process.platform !== 'win32' || process.arch !== 'x64')
+    throw new Error('Only Windows x64 supported');
+  const executable = join(
+    process.env.SystemRoot ?? 'C:\\Windows',
+    'System32/WindowsPowerShell/v1.0/powershell.exe',
+  );
+  const args = [
+    '-NoLogo',
+    '-NoProfile',
+    '-NonInteractive',
+    '-File',
+    helperPath,
+    '-Action',
+    key ? 'SetIndicator' : 'ReadIndicators',
+  ];
+  if (key && color)
+    args.push(
+      '-Key',
+      `number${key.slice(5)}`,
+      '-Red',
+      String(color.red),
+      '-Green',
+      String(color.green),
+      '-Blue',
+      String(color.blue),
+    );
+  return new Promise((resolve, reject) => {
+    execFile(
+      executable,
+      args,
+      { windowsHide: true, timeout: 15000, maxBuffer: 4096 },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(helperFailure(stderr, error.killed ?? false));
+          return;
+        }
+        try {
+          const result: unknown = JSON.parse(stdout.replace(/^\uFEFF/, '').trim());
+          validateIndicatorColors(result);
+          resolve(result);
+        } catch {
+          reject(new Error('Invalid indicator helper response'));
         }
       },
     );

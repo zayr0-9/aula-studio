@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
+import { StreamPanel } from './StreamPanel';
+import { IndicatorPanel } from './IndicatorPanel';
 import { BrightnessPanel } from './BrightnessPanel';
 import { KnobPanel } from './KnobPanel';
 import { MappingPanel } from './MappingPanel';
 import type { ShellInfo } from '../../shared/contracts';
 import { applyTheme, nextThemePreference, readThemePreference, saveThemePreference } from './theme';
+
+import type { IndicatorColors } from '../../shared/indicators';
 
 type Page = 'Lighting' | 'Remapping' | 'Knob' | 'Macros';
 const pages: Page[] = ['Lighting', 'Remapping', 'Knob', 'Macros'];
@@ -11,6 +15,7 @@ const pages: Page[] = ['Lighting', 'Remapping', 'Knob', 'Macros'];
 export default function App() {
   const [page, setPage] = useState<Page>('Lighting');
   const [theme, setTheme] = useState(readThemePreference);
+  const [indicators, setIndicators] = useState<IndicatorColors | null>(null);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -116,7 +121,13 @@ export default function App() {
           </div>
           {/* Keep transaction state and failure latches when changing pages. */}
           <div hidden={page !== 'Lighting'} className="lighting-page t-page">
-            <BrightnessPanel enabled={enabled} />
+            <BrightnessPanel
+              enabled={enabled}
+              indicators={indicators}
+              onIndicators={setIndicators}
+            />
+            <StreamPanel enabled={enabled} />
+            <IndicatorPanel enabled={enabled} onIndicators={setIndicators} />
           </div>
           <div hidden={page !== 'Remapping'} className="t-page">
             <MappingPanel enabled={enabled} />

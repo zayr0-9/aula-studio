@@ -21,6 +21,12 @@ test('only brightness and shell information cross preload bridge', () => {
   assert.deepEqual(
     [...preload.matchAll(/ipcRenderer\.invoke\('([^']+)'/g)].map((match) => match[1]),
     [
+      'stream:status',
+      'stream:start',
+      'stream:update',
+      'stream:stop',
+      'indicators:read',
+      'indicators:set',
       'brightness:read',
       'brightness:set',
       'effect:read',

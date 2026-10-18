@@ -4,6 +4,16 @@ import {
   validateMappings,
 } from '../shared/mapping.ts';
 import type { KeyAssignment } from '../shared/mapping.ts';
+import {
+  validateIndicatorKey,
+  validateIndicatorRgb,
+  validateIndicatorColors,
+} from '../shared/indicators.ts';
+import type { IndicatorColors, IndicatorKey, IndicatorRgb } from '../shared/indicators.ts';
+export type IndicatorTransaction = (
+  key?: IndicatorKey,
+  color?: IndicatorRgb,
+) => Promise<IndicatorColors>;
 export type MappingTransaction = (source?: string, target?: string) => Promise<KeyAssignment[]>;
 
 import { validateFixedColor } from '../shared/color.ts';
@@ -42,8 +52,8 @@ export function validateObservedEffect(value: unknown): asserts value is number 
 }
 
 export function validateEffect(value: unknown): asserts value is number {
-  if (value !== 1 && value !== 11 && value !== 17) {
-    throw new Error('Only Fixed_on, Neon_stream and Blossoming are supported');
+  if (value !== 0 && value !== 1 && value !== 11 && value !== 17) {
+    throw new Error('Only Off, Fixed_on, Neon_stream and Blossoming are supported');
   }
 }
 
@@ -59,6 +69,17 @@ export class BrightnessService {
   private faulted = false;
   private pending = 0;
   private stopping = false;
+  private streamOwned = false;
+
+  reserveStream(): void {
+    if (this.stopping || this.faulted || this.pending || this.streamOwned)
+      throw new Error('Device busy or blocked; finish other operations first');
+    this.streamOwned = true;
+  }
+
+  releaseStream(): void {
+    this.streamOwned = false;
+  }
 
   stop(): Promise<unknown> {
     this.stopping = true;
@@ -71,6 +92,8 @@ export class BrightnessService {
 
   private readonly mappingTransact: MappingTransaction;
 
+  private readonly indicatorTransact: IndicatorTransaction;
+
   constructor(
     transact: BrightnessTransaction,
     colorTransact: (color?: FixedColor) => Promise<FixedColor> = async () => {
@@ -79,10 +102,39 @@ export class BrightnessService {
     mappingTransact: MappingTransaction = async () => {
       throw new Error('Mapping transport unavailable');
     },
+    indicatorTransact: IndicatorTransaction = async () => {
+      throw new Error('Indicator transport unavailable');
+    },
   ) {
     this.transact = transact;
     this.colorTransact = colorTransact;
     this.mappingTransact = mappingTransact;
+    this.indicatorTransact = indicatorTransact;
+  }
+
+  readIndicators(): Promise<IndicatorColors> {
+    return this.queue(async () => {
+      const result = await this.indicatorTransact();
+      validateIndicatorColors(result);
+      return result;
+    });
+  }
+
+  setIndicator(key: unknown, value: unknown): Promise<IndicatorColors> {
+    validateIndicatorKey(key);
+    validateIndicatorRgb(value);
+    const color = { ...value };
+    return this.queue(async () => {
+      const result = await this.indicatorTransact(key, color);
+      validateIndicatorColors(result);
+      if (
+        result[key].red !== color.red ||
+        result[key].green !== color.green ||
+        result[key].blue !== color.blue
+      )
+        throw new Error('Indicator readback mismatch');
+      return result;
+    });
   }
 
   readMappings(): Promise<KeyAssignment[]> {
@@ -150,7 +202,8 @@ export class BrightnessService {
 
   setEffectBrightness(effect: unknown, brightness: unknown): Promise<number> {
     validateEffect(effect);
-    if (effect === 17) throw new Error('Blossoming does not support brightness');
+    if (effect !== 1 && effect !== 11)
+      throw new Error('Combined brightness requires Fixed_on or Neon_stream');
     validateBrightness(brightness);
     return this.enqueue(effect, 'SetEffectBrightness', brightness);
   }
@@ -191,6 +244,8 @@ export class BrightnessService {
   }
 
   private queue<T>(work: () => Promise<T>): Promise<T> {
+    if (this.streamOwned)
+      return Promise.reject(new Error('Stop temporary lighting before other device operations'));
     if (this.stopping) return Promise.reject(new Error('Brightness service is shutting down'));
     if (this.pending >= 8) return Promise.reject(new Error('Brightness queue is full'));
     this.pending++;

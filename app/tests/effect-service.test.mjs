@@ -35,7 +35,7 @@ test('unknown effects never reach transport', () => {
   const service = new BrightnessService(async () => {
     assert.fail('Unexpected transport');
   });
-  for (const value of [0, 2, 9, 16, 18, '11', null, undefined, {}, 1.5]) {
+  for (const value of [2, 9, 16, 18, '11', null, undefined, {}, 1.5]) {
     assert.throws(() => service.setEffect(value), /supported/);
   }
 });

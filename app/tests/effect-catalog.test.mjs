@@ -38,5 +38,6 @@ test('metadata catalog does not silently broaden hardware write allowlist', () =
     if (effect.captured) assert.doesNotThrow(() => validateEffect(effect.id));
     else assert.throws(() => validateEffect(effect.id));
   }
-  for (const excluded of [0, 21]) assert.throws(() => validateEffect(excluded));
+  assert.doesNotThrow(() => validateEffect(0)); // Explicit Studio turn-off action.
+  assert.throws(() => validateEffect(21));
 });
