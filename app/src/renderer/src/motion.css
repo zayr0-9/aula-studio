@@ -1,0 +1,275 @@
+/* Shared Transitions.dev motion vocabulary, tuned for a compact desktop workspace.
+   Gradients switch directly; only their solid borders, text and shadows interpolate. */
+:root {
+  --duration-micro: 80ms;
+  --duration-quick: 150ms;
+  --duration-fast: 250ms;
+  --duration-medium: 350ms;
+  --duration-slow: 400ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: ease-in-out;
+  --distance-micro: 3px;
+  --distance-base: 6px;
+  --scale-medium: 0.97;
+  --scale-tiny: 0.99;
+  --dropdown-open-dur: var(--duration-fast);
+  --dropdown-close-dur: var(--duration-quick);
+  --dropdown-pre-scale: var(--scale-medium);
+  --dropdown-closing-scale: var(--scale-tiny);
+  --dropdown-ease: var(--ease-smooth-out);
+}
+
+/* Override the already-installed mapping panel tokens regardless of import order. */
+:root:root {
+  --panel-open-dur: var(--duration-slow);
+  --panel-close-dur: var(--duration-medium);
+  --panel-translate-y: var(--distance-base);
+  --panel-blur: 2px;
+  --panel-ease: var(--ease-smooth-out);
+}
+
+/* Mounts and display:none -> visible both replay this entrance. No blur, delay,
+   pointer-event gate or persistent compositing layer on entire keyboard pages. */
+.t-page:not([hidden]) {
+  animation: t-page-enter var(--duration-fast) var(--ease-smooth-out);
+}
+
+@keyframes t-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--distance-base));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.t-page:not([hidden]) > .panel:not(.t-panel-slide) {
+  animation: t-panel-enter var(--duration-slow) var(--ease-smooth-out);
+}
+
+@keyframes t-panel-enter {
+  from {
+    opacity: 0.7;
+    transform: translateY(var(--distance-micro));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Keyed text mounts: intentionally custom, not the stateful text-swap recipe. */
+.t-text-swap {
+  animation: t-text-enter var(--duration-quick) var(--ease-in-out);
+}
+
+@keyframes t-text-enter {
+  from {
+    opacity: 0.4;
+    transform: translateY(var(--distance-micro));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Transitions.dev menu-dropdown recipe, preserved verbatim. */
+.t-dropdown {
+  transform-origin: top left;
+  transform: scale(var(--dropdown-pre-scale));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--dropdown-open-dur) var(--dropdown-ease),
+    opacity var(--dropdown-open-dur) var(--dropdown-ease);
+  will-change: transform, opacity;
+}
+.t-dropdown[data-origin='top-right'] {
+  transform-origin: top right;
+}
+.t-dropdown[data-origin='top-center'] {
+  transform-origin: top center;
+}
+.t-dropdown[data-origin='bottom-left'] {
+  transform-origin: bottom left;
+}
+.t-dropdown[data-origin='bottom-center'] {
+  transform-origin: bottom center;
+}
+.t-dropdown[data-origin='bottom-right'] {
+  transform-origin: bottom right;
+}
+
+.t-dropdown.is-open {
+  transform: scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+.t-dropdown.is-closing {
+  transform: scale(var(--dropdown-closing-scale));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--dropdown-close-dur) var(--dropdown-ease),
+    opacity var(--dropdown-close-dur) var(--dropdown-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-dropdown {
+    transition: none !important;
+  }
+}
+
+/* App integration: a mounted closed menu leaves layout and the accessibility
+   tree immediately. Discrete display enables starting-style on the next open;
+   deliberately do not transition display on close (no focusable fading menu). */
+.t-dropdown:not(.is-open) {
+  display: none;
+}
+
+.t-dropdown.is-open {
+  display: block;
+  transition:
+    transform var(--dropdown-open-dur) var(--dropdown-ease),
+    opacity var(--dropdown-open-dur) var(--dropdown-ease),
+    display var(--dropdown-open-dur) allow-discrete;
+}
+
+@starting-style {
+  .t-dropdown.is-open {
+    transform: scale(var(--dropdown-pre-scale));
+    opacity: 0;
+  }
+}
+
+/* Solid theme surfaces. Do not animate background images or key layout geometry. */
+:root,
+body,
+.sidebar,
+.topbar,
+.workspace-footer,
+.brand-symbol,
+.brand-subtitle,
+.sidebar-footer,
+.sidebar-footer span,
+.badge,
+.small-tag,
+.panel,
+.panel p,
+.panel label,
+legend,
+.supporting,
+.muted,
+fieldset,
+.lighting-section,
+.range-heading output,
+[role='status'],
+.mapping-route,
+.mapping-search,
+.mapping-tick,
+.select-menu:not(.t-dropdown),
+.select-option,
+.keyboard-case,
+.keyboard-deck,
+.keyboard-key,
+.keyboard-indicator {
+  transition:
+    color var(--duration-quick) var(--ease-in-out),
+    background-color var(--duration-quick) var(--ease-in-out),
+    border-color var(--duration-quick) var(--ease-in-out),
+    box-shadow var(--duration-quick) var(--ease-in-out),
+    outline-color var(--duration-quick) var(--ease-in-out);
+}
+
+/* Explicit button hooks exclude absolute-positioned keys. Keep existing hover
+   brightness as-is: no filter assignment or animation competes with it here. */
+.nav-item,
+.primary-button,
+.secondary-button,
+.select-trigger,
+.mapping-tile {
+  transition:
+    transform var(--duration-quick) var(--ease-smooth-out),
+    color var(--duration-quick) var(--ease-in-out),
+    background-color var(--duration-quick) var(--ease-in-out),
+    border-color var(--duration-quick) var(--ease-in-out),
+    box-shadow var(--duration-quick) var(--ease-in-out);
+}
+
+.select-trigger svg {
+  transition: transform var(--duration-quick) var(--ease-smooth-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .primary-button:not(:disabled):hover,
+  .secondary-button:not(:disabled):hover,
+  .mapping-tile:not(:disabled):hover {
+    transform: translateY(-1px);
+  }
+
+  .nav-item:not(:disabled):hover {
+    transform: translateX(2px);
+  }
+
+  .keyboard-key:not(:disabled):hover .keyboard-keycap {
+    transform: translateY(-1px);
+  }
+}
+
+.nav-item:not(:disabled):active,
+.primary-button:not(:disabled):active,
+.secondary-button:not(:disabled):active,
+.select-trigger:not(:disabled):active,
+.mapping-tile:not(:disabled):active {
+  transform: translateY(1px);
+  transition-duration: var(--duration-micro);
+}
+
+/* Only the cap travels; the absolute key button and its hit target stay put.
+   Preserve all RGB/selection shadows and the existing gradient materials. */
+.keyboard-keycap {
+  transition:
+    transform var(--duration-quick) var(--ease-smooth-out),
+    color var(--duration-quick) var(--ease-in-out),
+    border-color var(--duration-quick) var(--ease-in-out),
+    outline-color var(--duration-quick) var(--ease-in-out),
+    box-shadow var(--duration-quick) var(--ease-in-out);
+}
+
+.keyboard-key:not(:disabled):active .keyboard-keycap {
+  transform: translateY(2px);
+  transition-duration: var(--duration-micro);
+}
+
+/* Comprehensive opt-out also catches existing preview animations, inline
+   transitions and pseudo-elements, not just the recipes installed here. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+
+  .nav-item:not(:disabled):hover,
+  .nav-item:not(:disabled):active,
+  .primary-button:not(:disabled):hover,
+  .primary-button:not(:disabled):active,
+  .secondary-button:not(:disabled):hover,
+  .secondary-button:not(:disabled):active,
+  .select-trigger:not(:disabled):active,
+  .mapping-tile:not(:disabled):hover,
+  .mapping-tile:not(:disabled):active,
+  .keyboard-key:not(:disabled):hover .keyboard-keycap,
+  .keyboard-key:not(:disabled):active .keyboard-keycap {
+    transform: none;
+  }
+
+  .t-dropdown {
+    will-change: auto;
+  }
+}

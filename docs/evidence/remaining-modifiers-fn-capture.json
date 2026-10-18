@@ -1,0 +1,42 @@
+{
+  "scope": "Corrected wired F75; owner-operated official app; only USB control transfers inspected",
+  "modifierCapture": {
+    "file": "brightness-20261018-105439.pcap",
+    "sha256": "0102f0baf1bd4c4f2410a1f2ca14da88e48d91028c16c077ea99a66cb7a3637b",
+    "interface": "USBPcap3",
+    "deviceAddress": 2,
+    "writes": [
+      { "frame": 249, "target": "MetaLeft", "layer": 0, "slot": 7, "entry": [0, 8, 0, 0] },
+      { "frame": 251, "target": "AltLeft", "layer": 0, "slot": 7, "entry": [0, 4, 0, 0] },
+      { "frame": 253, "target": "ControlRight", "layer": 0, "slot": 7, "entry": [0, 16, 0, 0] },
+      { "frame": 255, "target": "ShiftRight", "layer": 0, "slot": 7, "entry": [0, 32, 0, 0] }
+    ],
+    "comparison": "All four 520-byte layer0 setters differ from canonical matrix-layer0-20261018-103210.json only at command byte1 and report offsets37,39 (slot7). No modifier chords captured."
+  },
+  "fnCapture": {
+    "file": "brightness-20261018-105839.pcap",
+    "sha256": "de1848854459c23cf1929fd9290e21ce5ce7de2b6d44a282f5f814b1e0630f84",
+    "stoppedEarly": true,
+    "writes": [
+      { "frame": 1, "phase": "assignFn", "layer": 0, "slot": 7, "entry": [13, 0, 0, 0] },
+      { "frame": 3, "phase": "assignFn", "layer": 1, "slot": 7, "entry": [13, 0, 0, 0] },
+      { "frame": 5, "phase": "assignFn", "layer": 2, "slot": 7, "entry": [13, 0, 0, 0] },
+      { "frame": 7, "phase": "restore1", "layer": 0, "slot": 7, "entry": [0, 0, 0, 30] },
+      { "frame": 9, "phase": "restore1", "layer": 1, "slot": 7, "entry": [7, 0, 0, 5] },
+      { "frame": 11, "phase": "restore1", "layer": 2, "slot": 7, "entry": [0, 0, 0, 0] }
+    ],
+    "comparison": "Within each layer, assignment and restoration differ only at slot7. Final layer0 setter payload exactly matches all512 bytes of canonical matrix-layer0-20261018-103210.json. All12 captured control records have USBD_STATUS_SUCCESS. No layer1/2 pretest snapshots or independent fresh readback obtained.",
+    "limitations": [
+      "SetFeature success and recorded setter content are not independent device readback or physical acceptance.",
+      "No evidence yet for fresh layer1/2 query responses, restoration of arbitrary prior multilayer assignments, or replacing original physical Fn.",
+      "Never replay these full captured layer buffers as device state or restoration sources.",
+      "Fn remains disabled in production pending fresh multilayer read/preservation and failure semantics."
+    ]
+  },
+  "agreedFnUx": {
+    "advancedOnly": true,
+    "warningModalRequired": true,
+    "replacementFnRequiredBeforeOriginalReassignment": true,
+    "backendMustEnforceReplacementFromFreshDeviceState": true
+  }
+}

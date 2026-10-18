@@ -1,0 +1,139 @@
+/* Panel-reveal recipe adapted from Transitions.dev (Jakub Antalik, 2026).
+   Skill installed locally; no runtime library or dependency required. */
+:root {
+  --panel-open-dur: 400ms;
+  --panel-close-dur: 350ms;
+  --panel-translate-y: 12px;
+  --panel-blur: 2px;
+  --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+.t-panel-slide {
+  display: none;
+  transform: translateY(var(--panel-translate-y));
+  opacity: 0;
+  filter: blur(var(--panel-blur));
+  pointer-events: none;
+  transition:
+    transform var(--panel-close-dur) var(--panel-ease),
+    opacity var(--panel-close-dur) var(--panel-ease),
+    filter var(--panel-close-dur) var(--panel-ease);
+}
+.t-panel-slide[data-open='true'] {
+  display: block;
+  transform: translateY(0);
+  opacity: 1;
+  filter: blur(0);
+  pointer-events: auto;
+  transition:
+    transform var(--panel-open-dur) var(--panel-ease),
+    opacity var(--panel-open-dur) var(--panel-ease),
+    filter var(--panel-open-dur) var(--panel-ease);
+}
+@starting-style {
+  .t-panel-slide[data-open='true'] {
+    transform: translateY(var(--panel-translate-y));
+    opacity: 0;
+    filter: blur(var(--panel-blur));
+  }
+}
+.mapping-chooser {
+  border-top: 1px solid var(--section-border);
+  padding-top: 22px;
+}
+.mapping-chooser h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.mapping-route {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 8px;
+  color: var(--nav-active-text);
+  background: var(--route);
+  font-size: 13px;
+}
+.mapping-search-label {
+  display: block;
+  margin: 20px 0 8px;
+}
+.mapping-search {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: 8px;
+  border: 1px solid var(--control-border);
+  background: var(--search);
+  color: var(--control-text);
+}
+.mapping-targets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  gap: 9px;
+  max-height: 270px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 8px 6px 8px 3px;
+  margin: 12px 0 20px;
+}
+.mapping-tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 54px;
+  padding: 8px 4px;
+  border: 1px solid var(--tile-border);
+  border-bottom-width: 3px;
+  border-radius: 9px;
+  background: linear-gradient(155deg, var(--tile-start), var(--tile-end));
+  color: var(--tile-text);
+  font-size: 12px;
+}
+.mapping-tile[aria-pressed='true'] {
+  background: var(--selection);
+  border-color: var(--accent);
+  color: var(--selection-text);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.mapping-tile:not(:disabled):active {
+  transform: translateY(1px);
+  border-bottom-width: 1px;
+}
+.mapping-tick {
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  font-size: 10px;
+  color: var(--accent);
+}
+.mapping-no-results {
+  grid-column: 1 / -1;
+  padding: 16px;
+}
+.mapping-empty {
+  text-align: center;
+  padding: 14px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-panel-slide {
+    transition: none !important;
+  }
+}
+@media (max-width: 720px) {
+  .mapping-chooser .section-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+.mapping-modifiers {
+  margin-top: 14px;
+  align-items: center;
+}
+.mapping-modifiers button[aria-pressed='true'] {
+  background: var(--selection);
+  border-color: var(--accent);
+  color: var(--selection-text);
+}

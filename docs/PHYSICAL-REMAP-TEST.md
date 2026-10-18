@@ -1,0 +1,19 @@
+# Standalone remapping physical verification harness
+
+Script: scripts/test-remap-physical.ps1. Default and -CompileCheck perform no device I/O. Explicit -Run runs production restricted PgUp/Home getters/setters in bounded15second children; no Studio UI required, no hooks/global keylogger/input injection.
+
+Workflow: refuse OemDrv or any Electron process; query initial PgUp75 (otherwise refuse unchanged); focus/Arm and physically press+release PgUp to verify Windows PageUp; set Home74 (production fresh layer read/one write/full512readback); Arm/physically press PgUp to verify Windows Home; finally restore PgUp75 using another fresh read/modify/write/fullreadback, never saved layer buffer; final Arm/press verifies physical restoration. Prompt timeouts20seconds after Arm; close/Cancel aborts physical stage. Logs only pass/fail state, no ordinary typed content. Focused events are not device-specific, so pressing Home itself or another keyboard can yield false confirmation: instructions require actual F75 PgUp. No synthetic press can verify device switch behavior.
+
+One restoration attempt after ANY attempted write, even failed send (may have applied). Not a blind replay or retry: production fresh query must validate known source74/75 signature and exact interface/mutex/process checks. If restoration fails no repeat; explicit error in timestamped evidence. Script/process termination, disconnect, blocked driver, other app reopening or OS failure may prevent restoration. Keep PowerShell open and do not disconnect; do not promise guaranteed recovery. Timeout does not prove no write applied. Snapshot isn't whole keyboard backup.
+
+Current test scope intentionally only known PgUp→Home→PgUp; not arbitrary combos/modifiers. This establishes reusable physical-test workflow before ordinary-key expansion; no claim that unimplemented general combinations were validated. Add target categories only after their encoding and restoration reviewed, and avoid automated unattended loops that leave many keys altered.
+
+Validation executed: compile-only prompt passed, no-Run default refused I/O as intended, existing native-matrix-offline.ps1 passed preservation/invalid input regressions. No hardware read/write or physical observation executed in harness validation. Live run requires owner ready to press physical keys. Command: powershell.exe -NoProfile -STA -File D:\Projects\aula\scripts\test-remap-physical.ps1 -Run.
+
+## Updated default: all ordinary keys, arbitrary order
+
+`test-remap-physical.ps1 -Run` now launches `verify-keyboard-keys.ps1`, a no-write inventory of73ordinary key identities derived from corrected model1. Press each ordinary key once in any order; duplicate presses ignored. Window displays missing/seen keys and saves timestamped pass/missing results. Five-minute timer after Arm, or Finish/close early. Defaults/CompileCheck do not observe input or touch keyboard. Old PgUp/Home mapping experiment requires explicit `-RemapPair -Run`.
+
+Focused Windows key events are NOT source-specific or proof of physical matrix position. Use only F75; restore existing remaps first. Swapped keys could cover the entire identity inventory and still pass; this is an emitted-key coverage test, not independent proof every physical position is correct. Truly verifying physical position requires guided requested-key order (or clicking intended physical position first). Keyboard shortcut combinations/system hotkeys are not blocked globally; do not press modifiers. UK character layout does not change the test's virtual-key identity comparison. Some OS-reserved keys may not arrive and must be reported missing, not assumed passed.
+
+Exceptions deferred to todo: Fn, modifiers, knob, media actions, macros and multi-key shortcuts. No NxN remap/write loop introduced. Compile validation loaded73unique entries; live physical inventory pending.

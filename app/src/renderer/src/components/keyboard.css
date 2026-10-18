@@ -1,0 +1,197 @@
+/* Keyboard materials follow the app theme; RGB colors remain device/preview values. */
+:root {
+  --keyboard-selection: #b4f3d6;
+  --keyboard-focus: #a0f0cf;
+  --keycap-frost-top: #18221c80;
+  --keycap-frost-bottom: #0c1510b3;
+  --keycap-light-strength: 1;
+}
+:root[data-theme='light'] {
+  --keyboard-selection: #246e4b;
+  --keyboard-focus: #246e4b;
+  --keycap-frost-top: #ffffff70;
+  --keycap-frost-bottom: #e0e8df99;
+  --keycap-light-strength: 1;
+}
+.keyboard-scroll {
+  overflow-x: auto;
+  padding: 6px 2px 12px;
+}
+.keyboard-case {
+  container-type: inline-size;
+  position: relative;
+  min-width: 600px;
+  width: 100%;
+  aspect-ratio: var(--keyboard-ratio);
+  padding: 2.4%;
+  border: 1px solid #606563;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #464c49, #303633);
+  box-shadow:
+    inset 0 2px 2px #ffffff20,
+    inset 0 -3px 2px #0004,
+    0 6px 14px #0003;
+}
+.keyboard-deck {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 5px;
+  background: #171b19;
+  box-shadow: 0 0 0 4px #252b28;
+}
+.keyboard-key {
+  position: absolute;
+  display: block;
+  padding: 2px;
+  border: 0;
+  background: transparent;
+  color: #e2e5e3;
+  font-size: clamp(9px, 1.22cqi, 14px);
+  font-weight: 500;
+  line-height: 1;
+  text-align: center;
+}
+.keyboard-keycap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 2px 3px 5px;
+  border: 1px solid #626964;
+  border-bottom: 4px solid #303733;
+  border-radius: 4px;
+  background: linear-gradient(160deg, #505952, #414a44);
+  box-shadow:
+    inset 1px 1px 1px #ffffff18,
+    inset -1px -1px 2px #0003,
+    0 1px 2px #0008;
+}
+/* An LED wash sits beneath the cap, giving backdrop blur real color to diffuse.
+   Keep opacity on this decorative layer, never on the label or the whole key. */
+.keyboard-key.has-color::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 5px;
+  pointer-events: none;
+  /* Small hot emitter behind the cap, not a flat full-key color fill. */
+  background: radial-gradient(
+    ellipse at 50% 68%,
+    #fff 0%,
+    color-mix(in srgb, var(--key-color) 55%, white) 8%,
+    var(--key-color) 24%,
+    color-mix(in srgb, var(--key-color) 65%, transparent) 42%,
+    transparent 72%
+  );
+  box-shadow:
+    0 3px 5px -2px var(--key-color),
+    0 4px 14px -3px var(--key-color);
+  opacity: calc(var(--preview-opacity, 1) * var(--keycap-light-strength));
+}
+.keyboard-key.has-color .keyboard-keycap {
+  background: linear-gradient(160deg, var(--keycap-frost-top), var(--keycap-frost-bottom));
+  backdrop-filter: blur(3px) saturate(1.65);
+  border-color: #adc6b54d;
+  border-bottom-color: #15251dcc;
+  box-shadow:
+    inset 0 1px 1px #ffffff45,
+    inset 0 -3px 5px #06100980,
+    0 2px 3px #0008;
+  text-shadow:
+    0 1px 3px #000,
+    0 0 2px #000;
+}
+:root[data-theme='light'] .keyboard-key.has-color .keyboard-keycap {
+  border-color: #ffffff99;
+  border-bottom-color: #8da49499;
+  text-shadow: 0 1px 2px #ffffffb3;
+}
+.keyboard-key.is-selected .keyboard-keycap {
+  border-color: var(--keyboard-selection);
+  outline: 2px solid var(--keyboard-selection);
+  outline-offset: -3px;
+}
+.keyboard-key:focus-visible {
+  z-index: 2;
+  outline-color: var(--keyboard-focus);
+  outline-offset: 1px;
+  border-radius: 5px;
+}
+.keyboard-key:disabled {
+  opacity: 0.5;
+}
+.keyboard-knob {
+  height: auto !important;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 2px solid #888f8b;
+  border-radius: 50%;
+  background: repeating-conic-gradient(#656e68 0deg 3deg, #929a94 3deg 5deg);
+  box-shadow: 0 2px 3px #0009;
+}
+.keyboard-knob .keyboard-keycap {
+  width: 88%;
+  height: 88%;
+  margin: 6%;
+  border-radius: 50%;
+  border: 1px solid #9ca49e;
+  background: linear-gradient(130deg, #7d8680, #4f5952);
+  padding: 0;
+  font-size: 0;
+}
+.keyboard-indicator {
+  position: absolute;
+  left: 9.4%;
+  top: 1%;
+  width: 0.45%;
+  height: 11%;
+  border-radius: 4px;
+  background: #828f87;
+  box-shadow: inset 0 0 2px #000;
+}
+
+:root[data-theme='light'] .keyboard-case {
+  border-color: #b4beb7;
+  background: linear-gradient(145deg, #ffffff, #dce3dd);
+  box-shadow:
+    inset 0 2px 2px #fff,
+    inset 0 -3px 2px #a6b3aa66,
+    0 6px 14px #243a2926;
+}
+:root[data-theme='light'] .keyboard-deck {
+  background: #bfc9c1;
+  box-shadow: 0 0 0 4px #d0d9d1;
+}
+:root[data-theme='light'] .keyboard-key {
+  color: #304238;
+}
+:root[data-theme='light'] .keyboard-key:not(.has-color) .keyboard-keycap {
+  border-color: #bac7bd;
+  border-bottom-color: #aebcb2;
+  background: linear-gradient(160deg, #ffffff, #eaf0e9);
+}
+:root[data-theme='light'] .keyboard-key:not(.has-color) .keyboard-keycap {
+  box-shadow:
+    inset 1px 1px 1px #fff,
+    inset -1px -1px 2px #91a49633,
+    0 1px 2px #344a3b40;
+}
+:root[data-theme='light'] .keyboard-key.is-selected .keyboard-keycap {
+  border-color: var(--keyboard-selection);
+}
+:root[data-theme='light'] .keyboard-knob {
+  border-color: #a4b2a8;
+  background: repeating-conic-gradient(#c3cec6 0deg 3deg, #edf2ee 3deg 5deg);
+  box-shadow: 0 2px 3px #344a3b40;
+}
+:root[data-theme='light'] .keyboard-knob .keyboard-keycap {
+  border-color: #acb9b0;
+  background: linear-gradient(130deg, #ffffff, #cdd8d0);
+}
+:root[data-theme='light'] .keyboard-indicator {
+  background: #6d8876;
+  box-shadow: inset 0 0 2px #3c5445;
+}

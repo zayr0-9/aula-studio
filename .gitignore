@@ -1,0 +1,58 @@
+# Dependencies, build output and local tools
+**/node_modules/
+**/out/
+**/dist/
+**/coverage/
+**/target/
+**/.DS_Store
+**/Thumbs.db
+**/*.tsbuildinfo
+
+# Local secrets, machine state and editor/session data
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/.ygg/
+**/.vscode/
+**/.idea/
+
+# Private raw USB captures can contain keystrokes. Publish control-only evidence instead.
+*.pcap
+*.pcapng
+*.cap
+*.etl
+*.log
+*.jsonl
+*.stdout.txt
+*.stderr.txt
+/capture-tools/capture-status.json
+/capture-tools/recovery-status.txt
+/capture-tools/restore-point-creation.txt
+
+# Proprietary vendor packages, extracted program assets, installers and archives
+*.exe
+*.dll
+*.msi
+*.sys
+*.zip
+*.7z
+*.rar
+/driver-comparison/vendor-archive/
+
+# Keep installed skill collection local; app's applied CSS remains versioned.
+/.agents/
+
+# Uncurated machine-specific analysis dumps; curated conclusions/evidence live in docs.
+/analysis-*.json
+/phase2-*.json
+/*-corrected-*.json
+/docs/evidence/corrected-palette-static.json
+/docs/evidence/capture-feasibility.json
+/docs/evidence/phase3-handoff.json
+/docs/evidence/device-observations.json
+/docs/evidence/hardware-phase2.json
+/docs/device-observations.md
